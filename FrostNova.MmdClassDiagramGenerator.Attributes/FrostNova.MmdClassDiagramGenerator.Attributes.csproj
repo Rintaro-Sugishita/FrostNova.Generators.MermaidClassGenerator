@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
+    <Version>1.0.0.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <PackageOutputPath>$(SolutionDir).localNuget</PackageOutputPath>
+    <RepositoryUrl>https://github.com/Rintaro-Sugishita/FrostNova.Generators.MermaidClassGenerator</RepositoryUrl>
+    <Authors>R.Sugishita</Authors>
+   <EmitEmbeddedSources>true</EmitEmbeddedSources>
+    <NupkgCopyDestination>$(SolutionDir)\publish</NupkgCopyDestination>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+</Project>
