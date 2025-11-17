@@ -13,7 +13,7 @@ namespace FrostNova.MmdClassDiagramBase
 {
     public class MermaidBuilder
     {
-        public void Output(List<DependIndo> list, DiagramConfig config, string outputDir)
+        public void Output(List<DependInfo> list, DiagramConfig config, string outputDir)
         {
 
             var outputType = config.GetOutputType();
@@ -35,7 +35,17 @@ namespace FrostNova.MmdClassDiagramBase
                 foreach (var item in rootClasses)
                 {
                     var sb = new StringBuilder();
-                    Output(sb, item.ToList(), config, outputType);
+                    //ルート要素だけでなく、依存するものも追加する
+
+                    var dependencies = new List<DependInfo>();
+                    dependencies.AddRange(item);
+                    foreach (var item2 in item)
+                    {
+                        dependencies.AddRange(
+                        DependInfo.GetAllDependencies(list, item2.Source));
+                    }
+
+                    Output(sb, dependencies.ToList(), config, outputType);
                     var outputPath = Path.Combine(outputDir, $"{item.Key.Name}{outputExtension}");
 
                     File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
@@ -47,8 +57,19 @@ namespace FrostNova.MmdClassDiagramBase
                 foreach (var group in groups)
                 {
                     var roots = list.Where(x => x.Source.Groups.Contains(group) || (x.Dest?.Groups.Contains(group)==true)).ToList();
+                    //ルート要素だけでなく、依存するものも追加する
+
+                    var dependencies = new List<DependInfo>();
+                    dependencies.AddRange(roots);
+                    foreach (var item in roots)
+                    {
+                        dependencies.AddRange(
+                        DependInfo.GetAllDependencies(list, item.Source));
+
+                    }
+
                     var sb = new StringBuilder();
-                    Output(sb, roots.ToList(), config, outputType);
+                    Output(sb, dependencies.Distinct().ToList(), config, outputType);
                     var outputPath = Path.Combine(outputDir, $"{group}{outputExtension}");
                     File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
                 }
@@ -61,7 +82,7 @@ namespace FrostNova.MmdClassDiagramBase
 
 
 
-        private void Output(StringBuilder sb, List<DependIndo> list, DiagramConfig config, MermaidOutputType type)
+        private void Output(StringBuilder sb, List<DependInfo> list, DiagramConfig config, MermaidOutputType type)
         {
 
             if (type.HasFlag(MermaidOutputType.Markdown))
@@ -119,10 +140,17 @@ namespace FrostNova.MmdClassDiagramBase
             sb.Append("    class ");
             sb.Append(classInfo.Name);
 
-            if (classInfo.GenericTypes.Count > 0)
+            if (classInfo.GenericArgumentNames.Count > 0)
             {
                 sb.Append("~");
-                sb.Append(classInfo.GenericTypes.First().Name);
+
+                for (int i = 0; i < classInfo.GenericArgumentNames.Count; i++)
+                {
+                    if(i > 0) { sb.Append(", "); }
+                    sb.Append(classInfo.GenericArgumentNames[i]);
+                }
+
+
                 sb.Append("~");
             }
             sb.AppendLine("{");
@@ -268,7 +296,7 @@ namespace FrostNova.MmdClassDiagramBase
             }
         }
 
-        public static void WriteDependency(StringBuilder sb, DependIndo info)
+        public static void WriteDependency(StringBuilder sb, DependInfo info)
         {
             if (info.Dest == null) return;
             sb.Append(info.Source.Name);

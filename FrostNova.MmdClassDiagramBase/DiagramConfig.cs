@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FrostNova.MmdClassDiagramGenerator
 {
@@ -32,6 +33,7 @@ namespace FrostNova.MmdClassDiagramGenerator
             }
         }
 
+        [JsonIgnore]
         public Accessibility MethodAccessibilityEnum { get; internal set; } = Accessibility.Private;
 
         private string _PropertyAccessibility = "public";
@@ -43,6 +45,7 @@ namespace FrostNova.MmdClassDiagramGenerator
                 PropertyAccessibilityEnum = GetAccessibility(value);
             }
         }
+        [JsonIgnore]
         public Accessibility PropertyAccessibilityEnum { get; internal set; } = Accessibility.Public;
 
         public string _FieldAccessibility = "public";
@@ -55,6 +58,7 @@ namespace FrostNova.MmdClassDiagramGenerator
                 FieldAccessibilityEnum = GetAccessibility(value);
             }
         }
+        [JsonIgnore]
         public Accessibility FieldAccessibilityEnum { get; internal set; } = Accessibility.Public;
 
         static Accessibility GetAccessibility(string text)

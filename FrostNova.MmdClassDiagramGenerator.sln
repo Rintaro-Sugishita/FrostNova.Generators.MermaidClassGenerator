@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrostNova.MmdClassDiagramGe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrostNova.MmdClassDiagramGenerator.Attributes", "FrostNova.MmdClassDiagramGenerator.Attributes\FrostNova.MmdClassDiagramGenerator.Attributes.csproj", "{3A19C135-9E27-487D-ABD8-CAF339C43117}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{DDB4EF12-CC4E-5E88-E6FC-71A802F4DE97}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MmdClassDiagramBaseTest", "Tests\MmdClassDiagramBaseTest\MmdClassDiagramBaseTest.csproj", "{A4776D92-7791-471E-BD4C-AE8A8A5AAB0E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,9 +31,16 @@ Global
 		{3A19C135-9E27-487D-ABD8-CAF339C43117}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3A19C135-9E27-487D-ABD8-CAF339C43117}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3A19C135-9E27-487D-ABD8-CAF339C43117}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4776D92-7791-471E-BD4C-AE8A8A5AAB0E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4776D92-7791-471E-BD4C-AE8A8A5AAB0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4776D92-7791-471E-BD4C-AE8A8A5AAB0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4776D92-7791-471E-BD4C-AE8A8A5AAB0E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{A4776D92-7791-471E-BD4C-AE8A8A5AAB0E} = {DDB4EF12-CC4E-5E88-E6FC-71A802F4DE97}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F47F0191-ABB7-49CB-97D2-E67B42F62BF3}

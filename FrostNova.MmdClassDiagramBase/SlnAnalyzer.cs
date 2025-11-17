@@ -16,6 +16,7 @@ using FrostNova.MmdClassDiagramBase.Data;
 using MemberInfo = FrostNova.MmdClassDiagramBase.Data.MemberInfo;
 using MethodInfo = FrostNova.MmdClassDiagramBase.Data.MethodInfo;
 using FrostNova.MmdClassDiagramGenerator.Attributes;
+using Microsoft.Build.Locator;
 
 namespace FrostNova.MmdClassDiagramBase
 {
@@ -27,6 +28,27 @@ namespace FrostNova.MmdClassDiagramBase
 
         public async Task<List<ClassInfo>> AnalyzeSolution(string slnPath, DiagramConfig config)
         {
+            if (!MSBuildLocator.IsRegistered)
+            {
+                var instances = MSBuildLocator.QueryVisualStudioInstances().ToArray();
+                if (instances.Length > 0)
+                {
+                    // Visual Studio や BuildTools が見つかった場合のみ Register
+                    MSBuildLocator.RegisterInstance(instances[0]);
+                }
+                else
+                {
+                    const string VS_DIR = @"C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin";
+                    if (System.IO.Directory.Exists(VS_DIR))
+                        MSBuildLocator.RegisterMSBuildPath(VS_DIR);
+                    else
+                        MSBuildLocator.RegisterDefaults();
+
+
+                }
+            }
+
+
             using var workspace = Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.Create();
 
             Console.WriteLine($"Loading solution: {slnPath}");
@@ -114,10 +136,10 @@ namespace FrostNova.MmdClassDiagramBase
 
                             for (int i = 0; i < attr.NamedArguments.Length; i++)
                             {
-                                var arg = attr.NamedArguments[i];       
+                                var arg = attr.NamedArguments[i];
 
-                                var paramName = arg.Key;                      
-                                var paramValue = arg.Value;                     
+                                var paramName = arg.Key;
+                                var paramValue = arg.Value;
 
 
                                 switch (paramName)
@@ -134,10 +156,10 @@ namespace FrostNova.MmdClassDiagramBase
                                     case nameof(MmdDiagramRootAttribute.ViewModelType):
 
                                         //既に解析済み、あるいはこれから解析予定のViewModelがWindowに設定されているか確認する
-                                        var vmType = paramValue.Value as Type;
+                                        var vmType = paramValue.Value as INamedTypeSymbol;
                                         if (vmType != null)
                                         {
-                                            classInfo.VmType = vmType;
+                                            classInfo.VmTypeSymbol = vmType;
                                         }
                                         break;
 
@@ -260,12 +282,12 @@ namespace FrostNova.MmdClassDiagramBase
 
         }
 
-        public List<DependIndo> AnalyzeDependencies(List<ClassInfo> list, DiagramConfig config)
+        public List<DependInfo> AnalyzeDependencies(List<ClassInfo> list, DiagramConfig config)
         {
             //依存関係をリスト化する
             //ここで要らないクラスは省く
 
-            var deps = new List<DependIndo>();
+            var deps = new List<DependInfo>();
             var visited = new HashSet<ClassInfo>();
             foreach (var classInfo in list)
             {
@@ -308,12 +330,12 @@ namespace FrostNova.MmdClassDiagramBase
                         isAdded.Add(AddDependency(deps, visited, classInfo, a, config, DependKind.Dependency));
                     }
                 }
-                
-                
+
+
                 //view model
-                if(classInfo.VmType != null)
+                if (classInfo.VmTypeSymbol != null)
                 {
-                    var vmClass = list.FirstOrDefault(x=> x.FullName == classInfo.VmType.FullName);
+                    var vmClass = list.FirstOrDefault(x => symbolComparer.Equals(x.Symbol, classInfo.VmTypeSymbol));
 
                     isAdded.Add(AddDependency(deps, visited, classInfo, vmClass, config, DependKind.Dependency));
                 }
@@ -328,20 +350,20 @@ namespace FrostNova.MmdClassDiagramBase
 
             //どことも関係がないものをリスト
             var unLoads = list
-                .Where(x => x.IsIgnore == false && 
+                .Where(x => x.IsIgnore == false &&
                             visited.Contains(x, classComparer) == false &&
                             x.FilePaths.Count > 0
                 )
                 .Distinct()
                 .ToList();
-            deps.AddRange(unLoads.Select(x => new DependIndo(x)));
+            deps.AddRange(unLoads.Select(x => new DependInfo(x)));
 
 
             return deps;
         }
 
 
-        private bool AddDependency(List<DependIndo> deps, HashSet<ClassInfo> visited, ClassInfo? classInfo, ClassInfo? dest, DiagramConfig config, DependKind kind)
+        private bool AddDependency(List<DependInfo> deps, HashSet<ClassInfo> visited, ClassInfo? classInfo, ClassInfo? dest, DiagramConfig config, DependKind kind)
         {
             if (classInfo == null) return false;
             if (dest == null) return false;
@@ -351,7 +373,7 @@ namespace FrostNova.MmdClassDiagramBase
             bool isAdded = false;
             if (IsTarget(dest, config))
             {
-                var dep = new DependIndo(classInfo, dest, kind);
+                var dep = new DependInfo(classInfo, dest, kind);
                 visited.Add(dep.Dest!);
                 deps.Add(dep);
                 isAdded = true;
@@ -362,7 +384,7 @@ namespace FrostNova.MmdClassDiagramBase
             {
                 if (IsTarget(returnGenericType, config))
                 {
-                    var dep = new DependIndo(classInfo, returnGenericType, DependKind.Association);
+                    var dep = new DependInfo(classInfo, returnGenericType, DependKind.Association);
                     visited.Add(dep.Dest!);
                     deps.Add(dep);
                     isAdded = true;
@@ -397,18 +419,22 @@ namespace FrostNova.MmdClassDiagramBase
             {
                 typeSymbol = new ClassInfo(symbol);
                 deps.Add(typeSymbol);
-            }
-
-            //ジェネリック型を解析する
-            if (typeSymbol is INamedTypeSymbol namedTypeSymbol && namedTypeSymbol.IsGenericType)
-            {
-                foreach (var item in namedTypeSymbol.TypeParameters)
+                //ジェネリック型を解析する
+                if (typeSymbol.Symbol is INamedTypeSymbol namedTypeSymbol && namedTypeSymbol.IsGenericType)
                 {
-                    var res = AddDeps(deps, item, baseClass);
-                    typeSymbol.GenericTypes.Add(res);
+                    foreach (var item in namedTypeSymbol.TypeArguments)
+                    {
+                        var res = AddDeps(deps, item, baseClass);
+                        typeSymbol.GenericTypes.Add(res);
 
+                    }
+                    foreach(var item in namedTypeSymbol.TypeParameters)
+                    {
+                        typeSymbol.GenericArgumentNames.Add(item.Name);
+                    }
                 }
             }
+
             return typeSymbol;
         }
 

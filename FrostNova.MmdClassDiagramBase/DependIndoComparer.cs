@@ -9,11 +9,11 @@ using System.Threading.Tasks;
 
 namespace FrostNova.MmdClassDiagramBase
 {
-    internal class DependIndoComparer : IEqualityComparer<DependIndo>
+    internal class DependIndoComparer : IEqualityComparer<DependInfo>
     {
         SymbolEqualityComparer _innerComparer = SymbolEqualityComparer.Default;
 
-        public bool Equals(DependIndo? x, DependIndo? y)
+        public bool Equals(DependInfo? x, DependInfo? y)
         {
             if (ReferenceEquals(x, y)) return true;
             if (ReferenceEquals(x, null)) return false;
@@ -22,7 +22,7 @@ namespace FrostNova.MmdClassDiagramBase
                 _innerComparer.Equals(x.Dest!.Symbol!, y.Dest!.Symbol!) && x.Kind == y.Kind;
         }
 
-        public int GetHashCode([DisallowNull] DependIndo obj)
+        public int GetHashCode([DisallowNull] DependInfo obj)
         {
            return _innerComparer.GetHashCode( obj.Source!.Symbol) | _innerComparer.GetHashCode(obj.Dest?.Symbol) | obj.Kind.GetHashCode();
         }

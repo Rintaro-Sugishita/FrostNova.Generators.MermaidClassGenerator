@@ -42,11 +42,11 @@ if (args.Length > 0)
             Console.WriteLine("Generated default configuration file: diagramgen.config.json");
             return 0;
         }
-        else
-        {
-            Console.WriteLine($"Unknown argument: {arg}");
-            return 1;
-        }
+        //else
+        //{
+        //    Console.WriteLine($"Unknown argument: {arg}");
+        //    return 1;
+        //}
     }
 }
 

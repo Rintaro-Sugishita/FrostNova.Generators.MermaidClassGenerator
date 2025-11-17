@@ -3,32 +3,38 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace FrostNova.MmdClassDiagramBase
 {
-    public static class DiagramConfigJson
+    [JsonSourceGenerationOptions(WriteIndented =true)]
+    [JsonSerializable(typeof(DiagramConfig))]
+    public partial class DiagramConfigJson : JsonSerializerContext
     {
         public static string Serialize(DiagramConfig config)
         {
-            var sb = new StringBuilder();
-            sb.Append("{");
+            //var sb = new StringBuilder();
+            //sb.Append("{");
 
-            Append(sb, "Mode", config.Mode, comma: true);
-            Append(sb, "OutputMode", config.OutputMode, comma: true);
-            AppendArray(sb, "ExcludeNameSpaces", config.ExcludeNameSpaces, comma: true);
-            Append(sb, "OutputPath", config.OutputPath, comma: true);
-            Append(sb, "OutputType", config.OutputType, comma: true);
-            AppendArray(sb, "ActiveBuildConfigurations", config.ActiveBuildConfigurations, comma: true);
+            //Append(sb, "Mode", config.Mode, comma: true);
+            //Append(sb, "OutputMode", config.OutputMode, comma: true);
+            //AppendArray(sb, "ExcludeNameSpaces", config.ExcludeNameSpaces, comma: true);
+            //Append(sb, "OutputPath", config.OutputPath, comma: true);
+            //Append(sb, "OutputType", config.OutputType, comma: true);
+            //AppendArray(sb, "ActiveBuildConfigurations", config.ActiveBuildConfigurations, comma: true);
 
-            Append(sb, "MethodAccessibility", config.MethodAccessibility, comma: true);
-            Append(sb, "PropertyAccessibility", config.PropertyAccessibility, comma: true);
-            Append(sb, "FieldAccessibility", config.FieldAccessibility, comma: true);
+            //Append(sb, "MethodAccessibility", config.MethodAccessibility, comma: true);
+            //Append(sb, "PropertyAccessibility", config.PropertyAccessibility, comma: true);
+            //Append(sb, "FieldAccessibility", config.FieldAccessibility, comma: true);
 
-            AppendArray(sb, "RootAttributes", config.RootAttributes, comma: false);
+            //AppendArray(sb, "RootAttributes", config.RootAttributes, comma: false);
 
-            sb.Append("}");
-            return sb.ToString();
+            //sb.Append("}");
+            //return sb.ToString();
+           return JsonSerializer.Serialize(config, typeof(DiagramConfig), new DiagramConfigJson());
+
         }
 
         private static void Append(StringBuilder sb, string name, string value, bool comma)
@@ -55,27 +61,28 @@ namespace FrostNova.MmdClassDiagramBase
 
         public static DiagramConfig Deserialize(string json)
         {
-            var config = new DiagramConfig();
+            //var config = new DiagramConfig();
 
-            var dict = ParseJsonObject(json);
+            //var dict = ParseJsonObject(json);
 
-            if (dict.TryGetValue("Mode", out var mode)) config.Mode = mode;
-            if (dict.TryGetValue("OutputMode", out var outputMode)) config.OutputMode = outputMode;
-            if (dict.TryGetValue("ExcludeNameSpaces", out var excludeNs))
-                config.ExcludeNameSpaces = ParseJsonArray(excludeNs);
-            if (dict.TryGetValue("OutputPath", out var outputPath)) config.OutputPath = outputPath;
-            if (dict.TryGetValue("OutputType", out var outputType)) config.OutputType = outputType;
-            if (dict.TryGetValue("ActiveBuildConfigurations", out var configs))
-                config.ActiveBuildConfigurations = ParseJsonArray(configs);
+            //if (dict.TryGetValue("Mode", out var mode)) config.Mode = mode;
+            //if (dict.TryGetValue("OutputMode", out var outputMode)) config.OutputMode = outputMode;
+            //if (dict.TryGetValue("ExcludeNameSpaces", out var excludeNs))
+            //    config.ExcludeNameSpaces = ParseJsonArray(excludeNs);
+            //if (dict.TryGetValue("OutputPath", out var outputPath)) config.OutputPath = outputPath;
+            //if (dict.TryGetValue("OutputType", out var outputType)) config.OutputType = outputType;
+            //if (dict.TryGetValue("ActiveBuildConfigurations", out var configs))
+            //    config.ActiveBuildConfigurations = ParseJsonArray(configs);
 
-            if (dict.TryGetValue("MethodAccessibility", out var methodAcc)) config.MethodAccessibility = methodAcc;
-            if (dict.TryGetValue("PropertyAccessibility", out var propAcc)) config.PropertyAccessibility = propAcc;
-            if (dict.TryGetValue("FieldAccessibility", out var fieldAcc)) config.FieldAccessibility = fieldAcc;
+            //if (dict.TryGetValue("MethodAccessibility", out var methodAcc)) config.MethodAccessibility = methodAcc;
+            //if (dict.TryGetValue("PropertyAccessibility", out var propAcc)) config.PropertyAccessibility = propAcc;
+            //if (dict.TryGetValue("FieldAccessibility", out var fieldAcc)) config.FieldAccessibility = fieldAcc;
 
-            if (dict.TryGetValue("RootAttributes", out var rootAttrs))
-                config.RootAttributes = ParseJsonArray(rootAttrs);
+            //if (dict.TryGetValue("RootAttributes", out var rootAttrs))
+            //    config.RootAttributes = ParseJsonArray(rootAttrs);
 
-            return config;
+            //return config;
+            return JsonSerializer.Deserialize(json, typeof(DiagramConfig), new DiagramConfigJson()) as DiagramConfig ?? new DiagramConfig();
         }
         private static Dictionary<string, string> ParseJsonObject(string json)
         {

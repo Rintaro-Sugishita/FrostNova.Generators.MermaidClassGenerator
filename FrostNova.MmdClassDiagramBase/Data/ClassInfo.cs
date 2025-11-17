@@ -15,7 +15,7 @@ namespace FrostNova.MmdClassDiagramBase.Data
         public bool IsRoot { get; set; } = false;
         public bool IsIgnore { get; set; } = false;
 
-        public Type? VmType { get; set; } = null;
+        public INamedTypeSymbol? VmTypeSymbol { get; set; } = null;
 
 
         public ITypeSymbol Symbol { get; set; }
@@ -40,6 +40,7 @@ namespace FrostNova.MmdClassDiagramBase.Data
 
         public ClassInfo? BaseType { get; set; }
         public List<ClassInfo> GenericTypes { get; set; } = new List<ClassInfo>();
+        public List<string> GenericArgumentNames { get; set; } = new List<string>();
 
 
         public List<MemberInfo> Properties { get; set; } = new List<MemberInfo>();
