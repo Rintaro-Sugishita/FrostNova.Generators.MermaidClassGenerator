@@ -49,6 +49,7 @@ namespace FrostNova.MmdClassDiagramBase
                     var outputPath = Path.Combine(outputDir, $"{item.Key.Name}{outputExtension}");
 
                     File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
+                    Console.WriteLine($"Diagram generated at: {outputPath}");
                 }
 
 
@@ -72,6 +73,7 @@ namespace FrostNova.MmdClassDiagramBase
                     Output(sb, dependencies.Distinct().ToList(), config, outputType);
                     var outputPath = Path.Combine(outputDir, $"{group}{outputExtension}");
                     File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
+                    Console.WriteLine($"Diagram generated at: {outputPath}");
                 }
             }
 
@@ -82,7 +84,7 @@ namespace FrostNova.MmdClassDiagramBase
 
 
 
-        private void Output(StringBuilder sb, List<DependInfo> list, DiagramConfig config, MermaidOutputType type)
+        public void Output(StringBuilder sb, List<DependInfo> list, DiagramConfig config, MermaidOutputType type)
         {
 
             if (type.HasFlag(MermaidOutputType.Markdown))
@@ -174,18 +176,18 @@ namespace FrostNova.MmdClassDiagramBase
             //プロパティの出力
             foreach (var field in classInfo.Properties)
             {
-                WriteMember(sb, field, config.PropertyAccessibilityEnum);
+                WriteMember(sb, field, config.PropertyAccessibility);
             }
             //フィールドの出力
             foreach (var field in classInfo.Fields)
             {
-                WriteMember(sb, field, config.FieldAccessibilityEnum);
+                WriteMember(sb, field, config.FieldAccessibility);
             }
 
             //関数の出力
             foreach (var method in classInfo.Methods)
             {
-                WriteMethod(sb, method, config.MethodAccessibilityEnum);
+                WriteMethod(sb, method, config.MethodAccessibility);
             }
 
             sb.AppendLine("    }");
@@ -203,8 +205,8 @@ namespace FrostNova.MmdClassDiagramBase
 
         public static void WriteMember(StringBuilder sb, MemberInfo member, Accessibility minAccessibility)
         {
-            if (member.Accessibility < minAccessibility) { return; }
             sb.Append("        ");
+            if ((int)member.Accessibility < (int)minAccessibility) { sb.Append("%%"); }
             sb.Append(GetMermaidVisibility(member.Accessibility));
 
             //型
@@ -219,8 +221,8 @@ namespace FrostNova.MmdClassDiagramBase
 
         public static void WriteMethod(StringBuilder sb, MethodInfo method, Accessibility minAccessibility)
         {
-            if (method.Accessibility < minAccessibility) { return; }
             sb.Append("        ");
+            if ((int)method.Accessibility < (int)minAccessibility) { sb.Append("%%"); }
             sb.Append(GetMermaidVisibility(method.Accessibility));
 
             //名前

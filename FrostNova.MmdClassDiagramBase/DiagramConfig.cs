@@ -1,5 +1,6 @@
 ﻿using FrostNova.MmdClassDiagramBase;
 using FrostNova.MmdClassDiagramBase.Data;
+using FrostNova.MmdClassDiagramBase.Json;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -23,47 +24,18 @@ namespace FrostNova.MmdClassDiagramGenerator
         public string OutputType { get; set; } = "md";
         public string[] ActiveBuildConfigurations { get; set; } = new[] { "Release", "Diagram" };
 
-        private string _MethodAccessibility = "private";
-        public string MethodAccessibility
-        {
-            get => _MethodAccessibility; set
-            {
-                _MethodAccessibility = value;
-                MethodAccessibilityEnum = GetAccessibility(value);
-            }
-        }
+        [JsonConverter(typeof(AccessibilityConverter))]
+        public Accessibility MethodAccessibility { get; set; } = Accessibility.Private;
 
-        [JsonIgnore]
-        public Accessibility MethodAccessibilityEnum { get; internal set; } = Accessibility.Private;
+        [JsonConverter(typeof(AccessibilityConverter))]
+        public Accessibility PropertyAccessibility { get; set; } = Accessibility.Public;
 
-        private string _PropertyAccessibility = "public";
-        public string PropertyAccessibility
-        {
-            get => _PropertyAccessibility; set
-            {
-                _PropertyAccessibility = value;
-                PropertyAccessibilityEnum = GetAccessibility(value);
-            }
-        }
-        [JsonIgnore]
-        public Accessibility PropertyAccessibilityEnum { get; internal set; } = Accessibility.Public;
-
-        public string _FieldAccessibility = "public";
-        public string FieldAccessibility
-        {
-            get => _FieldAccessibility;
-            set
-            {
-                _FieldAccessibility = value;
-                FieldAccessibilityEnum = GetAccessibility(value);
-            }
-        }
-        [JsonIgnore]
-        public Accessibility FieldAccessibilityEnum { get; internal set; } = Accessibility.Public;
+        [JsonConverter(typeof(AccessibilityConverter))]
+        public Accessibility FieldAccessibility { get; set; } = Accessibility.Public;
 
         static Accessibility GetAccessibility(string text)
         {
-            if (Enum.TryParse<Accessibility>(text, out var res))
+            if (Enum.TryParse<Accessibility>(text, ignoreCase: true, out var res))
             {
                 return res;
             }
@@ -96,7 +68,7 @@ namespace FrostNova.MmdClassDiagramGenerator
 
                 //var config = JsonSerializer.Deserialize<DiagramConfig>(json);
                 var config = DiagramConfigJson.Deserialize(json);
-                
+
                 if (config == null) throw new Exception("Deserialize returned null");
                 return config;
             }
