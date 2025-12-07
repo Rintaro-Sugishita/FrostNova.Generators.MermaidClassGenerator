@@ -11,7 +11,7 @@ namespace FrostNova.MmdClassDiagramBase.Data
     {
 
         public List<string> Groups { get; set; } = new();
-
+        public bool IsFirstRead { get; set; } = true;
         public bool IsRoot { get; set; } = false;
         public bool IsIgnore { get; set; } = false;
 

@@ -108,9 +108,12 @@ namespace FrostNova.MmdClassDiagramBase
             foreach (var group in namespaceGrouped)
             {
                 //名前空間の出力
-                sb.Append("namespace ");
-                sb.Append(group.Key);
-                sb.AppendLine(" {");
+                if (config.OutputNamespace)
+                {
+                    sb.Append("namespace ");
+                    sb.Append(group.Key);
+                    sb.AppendLine(" {");
+                }
 
                 foreach (var classInfo in group)
                 {
@@ -118,7 +121,10 @@ namespace FrostNova.MmdClassDiagramBase
                     WriteClass(sb, classInfo, config);
                 }
 
-                sb.AppendLine("}");
+                if (config.OutputNamespace)
+                {
+                    sb.AppendLine("}");
+                }
 
             }
 

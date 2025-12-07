@@ -110,10 +110,10 @@ namespace FrostNova.MmdClassDiagramBase
                 //既にあるならそっちを使う
                 classInfo = deps.First(x => symbolComparer.Equals(x.Symbol, clsSymbol));
             }
-            else
+            if (classInfo.IsFirstRead)
             {
                 //初ならクラス解析をする
-
+                classInfo.IsFirstRead = false;
                 //abstract, enum, interfaceの分岐
                 classInfo.IsEnum = clsSymbol.TypeKind == TypeKind.Enum;
                 classInfo.IsInterface = clsSymbol.TypeKind == TypeKind.Interface;
@@ -348,15 +348,18 @@ namespace FrostNova.MmdClassDiagramBase
 
             deps = deps.Distinct(new DependIndoComparer()).ToList();
 
-            //どことも関係がないものをリスト
-            var unLoads = list
-                .Where(x => x.IsIgnore == false &&
-                            visited.Contains(x, classComparer) == false &&
-                            x.FilePaths.Count > 0
-                )
-                .Distinct()
-                .ToList();
-            deps.AddRange(unLoads.Select(x => new DependInfo(x)));
+            if (config.IsFullMode)
+            {
+                //どことも関係がないものをリスト
+                var unLoads = list
+                    .Where(x => x.IsIgnore == false &&
+                                visited.Contains(x, classComparer) == false &&
+                                x.FilePaths.Count > 0
+                    )
+                    .Distinct()
+                    .ToList();
+                deps.AddRange(unLoads.Select(x => new DependInfo(x)));
+            }
 
 
             return deps;
@@ -428,7 +431,7 @@ namespace FrostNova.MmdClassDiagramBase
                         typeSymbol.GenericTypes.Add(res);
 
                     }
-                    foreach(var item in namedTypeSymbol.TypeParameters)
+                    foreach (var item in namedTypeSymbol.TypeParameters)
                     {
                         typeSymbol.GenericArgumentNames.Add(item.Name);
                     }

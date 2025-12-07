@@ -15,6 +15,9 @@ namespace FrostNova.MmdClassDiagramGenerator
     {
         public string Mode { get; set; } = "Full"; // "Full" or "Selective"
 
+        public bool IsFullMode => Mode == "Full";
+
+
         public string OutputMode { get; set; } = "One"; // "One" or "Multiple"
 
         public string[] ExcludeNameSpaces { get; set; } = ["System", "Microsoft"];
@@ -23,6 +26,9 @@ namespace FrostNova.MmdClassDiagramGenerator
 
         public string OutputType { get; set; } = "md";
         public string[] ActiveBuildConfigurations { get; set; } = new[] { "Release", "Diagram" };
+
+
+        public bool OutputNamespace { get; set; } = true;
 
         [JsonConverter(typeof(AccessibilityConverter))]
         public Accessibility MethodAccessibility { get; set; } = Accessibility.Private;
@@ -51,7 +57,7 @@ namespace FrostNova.MmdClassDiagramGenerator
 
         }
 
-        public string[] RootAttributes { get; set; } = new[] { "FrostNova.MmdClassDiagramGenerator.GenerateClassDiagramAttribute" };
+        public string[] RootAttributes { get; set; } = new[] { "FrostNova.MmdClassDiagramGenerator.Attributes.MmdDiagramRootAttribute" };
 
 
         public static DiagramConfig LoadConfig(string configPath)
