@@ -23,7 +23,7 @@ namespace FrostNova.MmdClassDiagramBase
             {
                 //1つのファイルにまとめて出力
                 var sb = new StringBuilder();
-                Output(sb, list, config, outputType);
+                Output(sb, list, config, outputType, config.OutputNamespace, config.ExcludeNameSpaces);
                 var outputPath = Path.Combine(outputDir, $"ClassDiagram{outputExtension}");
                 File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
                 Console.WriteLine($"Diagram generated at: {outputPath}");
@@ -45,7 +45,7 @@ namespace FrostNova.MmdClassDiagramBase
                         DependInfo.GetAllDependencies(list, item2.Source));
                     }
 
-                    Output(sb, dependencies.ToList(), config, outputType);
+                    Output(sb, dependencies.ToList(), config, outputType, config.OutputNamespace, config.ExcludeNameSpaces);
                     var outputPath = Path.Combine(outputDir, $"{item.Key.Name}{outputExtension}");
 
                     File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
@@ -55,10 +55,14 @@ namespace FrostNova.MmdClassDiagramBase
 
                 //1つのグループ単位でそれぞれ別のファイルへ出力
                 var groups = list.SelectMany(x => x.Source.Groups).Distinct().ToList();
+
+                var generalGroupConfig = config.groupConfigs.FirstOrDefault(x => string.IsNullOrEmpty(x.GroupName));
+
                 foreach (var group in groups)
                 {
                     var roots = list.Where(x => x.Source.Groups.Contains(group) || (x.Dest?.Groups.Contains(group)==true)).ToList();
                     //ルート要素だけでなく、依存するものも追加する
+                    var groupConfig = config.groupConfigs.FirstOrDefault(x =>x.GroupName == group);
 
                     var dependencies = new List<DependInfo>();
                     dependencies.AddRange(roots);
@@ -70,7 +74,10 @@ namespace FrostNova.MmdClassDiagramBase
                     }
 
                     var sb = new StringBuilder();
-                    Output(sb, dependencies.Distinct().ToList(), config, outputType);
+                    Output(sb, dependencies.Distinct().ToList(), config, outputType,
+                        generalGroupConfig?.OutputNamespace ?? groupConfig?.OutputNamespace ?? config.OutputNamespace,
+                        generalGroupConfig?.ExcludeNamespace ?? groupConfig?.ExcludeNamespace ?? config.ExcludeNameSpaces
+                        );
                     var outputPath = Path.Combine(outputDir, $"{group}{outputExtension}");
                     File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
                     Console.WriteLine($"Diagram generated at: {outputPath}");
@@ -84,7 +91,7 @@ namespace FrostNova.MmdClassDiagramBase
 
 
 
-        public void Output(StringBuilder sb, List<DependInfo> list, DiagramConfig config, MermaidOutputType type)
+        public void Output(StringBuilder sb, List<DependInfo> list, DiagramConfig config, MermaidOutputType type, bool isOutputNamespace, string[] excludeNamespace)
         {
 
             if (type.HasFlag(MermaidOutputType.Markdown))
@@ -107,8 +114,12 @@ namespace FrostNova.MmdClassDiagramBase
             //全クラスの出力
             foreach (var group in namespaceGrouped)
             {
+                if (excludeNamespace.Contains(group.Key))
+                {
+                    continue;
+                }
                 //名前空間の出力
-                if (config.OutputNamespace)
+                if (isOutputNamespace)
                 {
                     sb.Append("namespace ");
                     sb.Append(group.Key);
@@ -121,7 +132,7 @@ namespace FrostNova.MmdClassDiagramBase
                     WriteClass(sb, classInfo, config);
                 }
 
-                if (config.OutputNamespace)
+                if (isOutputNamespace)
                 {
                     sb.AppendLine("}");
                 }
@@ -131,7 +142,7 @@ namespace FrostNova.MmdClassDiagramBase
             //依存関係の出力
             foreach (var dependInfo in list)
             {
-                WriteDependency(sb, dependInfo);
+                WriteDependency(sb, dependInfo, excludeNamespace);
             }
 
             if (type.HasFlag(MermaidOutputType.Markdown))
@@ -304,9 +315,12 @@ namespace FrostNova.MmdClassDiagramBase
             }
         }
 
-        public static void WriteDependency(StringBuilder sb, DependInfo info)
+        public static void WriteDependency(StringBuilder sb, DependInfo info, string[] excludeNamespace)
         {
             if (info.Dest == null) return;
+            if (excludeNamespace.Contains(info.Source.Namespace)) return;
+            if (excludeNamespace.Contains(info.Dest.Namespace)) return;
+
             sb.Append(info.Source.Name);
             sb.Append(" ");
             sb.Append(GetMermaidRelationship(info.Kind));

@@ -39,6 +39,8 @@ namespace FrostNova.MmdClassDiagramGenerator
         [JsonConverter(typeof(AccessibilityConverter))]
         public Accessibility FieldAccessibility { get; set; } = Accessibility.Public;
 
+        public GroupConfig[] groupConfigs { get; set; } = [];
+
         static Accessibility GetAccessibility(string text)
         {
             if (Enum.TryParse<Accessibility>(text, ignoreCase: true, out var res))

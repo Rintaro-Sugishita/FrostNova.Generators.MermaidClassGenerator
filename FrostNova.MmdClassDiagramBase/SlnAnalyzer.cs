@@ -239,6 +239,7 @@ namespace FrostNova.MmdClassDiagramBase
 
 
                             //戻り値の型
+                            if (methodInfo.ReturnTypeSymbol.IsAnonymousType) continue;
                             var returns = AddDeps(deps, methodInfo.ReturnTypeSymbol, classInfo);
                             methodInfo.ReturnType = returns;
 
@@ -246,6 +247,7 @@ namespace FrostNova.MmdClassDiagramBase
                             foreach (var methodParam in methodInfo.Parameters)
                             {
                                 if (methodParam.TypeSymbol == null) continue;
+                                if (methodParam.TypeSymbol.IsAnonymousType) continue;
                                 var p = AddDeps(deps, methodParam.TypeSymbol, classInfo);
                                 methodParam.TypeClass = p;
                             }
@@ -274,6 +276,7 @@ namespace FrostNova.MmdClassDiagramBase
                 {
                     var target = semanticModel.GetSymbolInfo(inv).Symbol as IMethodSymbol;
                     if (target?.ContainingType == null) continue;
+                    if (target.ContainingType.IsAnonymousType) continue;
 
                     var methodDeclarationTypes = AddDeps(deps, target.ContainingType, classInfo);
                     classInfo.Depends.Add(methodDeclarationTypes);
@@ -427,6 +430,7 @@ namespace FrostNova.MmdClassDiagramBase
                 {
                     foreach (var item in namedTypeSymbol.TypeArguments)
                     {
+                        if (item.IsAnonymousType) continue;
                         var res = AddDeps(deps, item, baseClass);
                         typeSymbol.GenericTypes.Add(res);
 
