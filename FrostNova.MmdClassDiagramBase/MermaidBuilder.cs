@@ -60,9 +60,9 @@ namespace FrostNova.MmdClassDiagramBase
 
                 foreach (var group in groups)
                 {
-                    var roots = list.Where(x => x.Source.Groups.Contains(group) || (x.Dest?.Groups.Contains(group)==true)).ToList();
+                    var roots = list.Where(x => x.Source.Groups.Contains(group) || (x.Dest?.Groups.Contains(group) == true)).ToList();
                     //ルート要素だけでなく、依存するものも追加する
-                    var groupConfig = config.groupConfigs.FirstOrDefault(x =>x.GroupName == group);
+                    var groupConfig = config.groupConfigs.FirstOrDefault(x => x.GroupName == group);
 
                     var dependencies = new List<DependInfo>();
                     dependencies.AddRange(roots);
@@ -104,8 +104,24 @@ namespace FrostNova.MmdClassDiagramBase
 
             //クラス一覧を取得 出力対象外はここまでで省かれている
             var classList = list.Select(x => x.Source).ToList();
-            classList.AddRange(list.Where(x=> x.Dest!=null).Select(x => x.Dest!));
+            classList.AddRange(list.Where(x => x.Dest != null).Select(x => x.Dest!));
             classList = classList.Distinct().ToList();
+
+            // 出力対象クラス集合（そのファイルに関連するクラス）
+            var includedSet = new HashSet<ClassInfo>(classList);
+
+            // ルートクラス一覧（この出力の中にあるルート）
+            var rootsInOutput = classList.Where(c => c.IsRoot).ToList();
+
+            // ルートの ViewModel として含まれているクラス集合
+            var vmInOutput = new HashSet<ClassInfo>();
+            var symbolComparer = SymbolEqualityComparer.Default;
+            foreach (var root in rootsInOutput)
+            {
+                if (root.VmTypeSymbol == null) continue;
+                var vmClass = classList.FirstOrDefault(c => c.Symbol != null && symbolComparer.Equals(c.Symbol, root.VmTypeSymbol));
+                if (vmClass != null) vmInOutput.Add(vmClass);
+            }
 
             var namespaceGrouped = classList.GroupBy(x => x.Namespace);
 
@@ -129,7 +145,9 @@ namespace FrostNova.MmdClassDiagramBase
                 foreach (var classInfo in group)
                 {
                     sb.AppendLine();
-                    WriteClass(sb, classInfo, config);
+                    // ルートまたはその ViewModel の場合は全メンバー出力、それ以外は includedSet に関係するメンバーのみ出力
+                    var isRootOrVm = classInfo.IsRoot || vmInOutput.Contains(classInfo);
+                    WriteClass(sb, classInfo, config, includedSet, isRootOrVm);
                 }
 
                 if (isOutputNamespace)
@@ -154,7 +172,7 @@ namespace FrostNova.MmdClassDiagramBase
 
 
 
-        void WriteClass(StringBuilder sb, ClassInfo classInfo, DiagramConfig config)
+        void WriteClass(StringBuilder sb, ClassInfo classInfo, DiagramConfig config, HashSet<ClassInfo> includedSet, bool isRootOrVm)
         {
             sb.Append("    class ");
             sb.Append(classInfo.Name);
@@ -165,7 +183,7 @@ namespace FrostNova.MmdClassDiagramBase
 
                 for (int i = 0; i < classInfo.GenericArgumentNames.Count; i++)
                 {
-                    if(i > 0) { sb.Append(", "); }
+                    if (i > 0) { sb.Append(", "); }
                     sb.Append(classInfo.GenericArgumentNames[i]);
                 }
 
@@ -193,18 +211,27 @@ namespace FrostNova.MmdClassDiagramBase
             //プロパティの出力
             foreach (var field in classInfo.Properties)
             {
-                WriteMember(sb, field, config.PropertyAccessibility);
+                if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                {
+                    WriteMember(sb, field, config.PropertyAccessibility);
+                }
             }
             //フィールドの出力
             foreach (var field in classInfo.Fields)
             {
-                WriteMember(sb, field, config.FieldAccessibility);
+                if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                {
+                    WriteMember(sb, field, config.FieldAccessibility);
+                }
             }
 
             //関数の出力
             foreach (var method in classInfo.Methods)
             {
-                WriteMethod(sb, method, config.MethodAccessibility);
+                if (isRootOrVm || IsMethodRelevant(method, includedSet))
+                {
+                    WriteMethod(sb, method, config.MethodAccessibility);
+                }
             }
 
             sb.AppendLine("    }");
@@ -218,6 +245,24 @@ namespace FrostNova.MmdClassDiagramBase
             //    sb.AppendLine(classInfo.Name);
             //}
 
+        }
+
+        // 指定クラス集合に含まれる型か（ジェネリック引数も確認）
+        static bool IsMemberRelevant(ClassInfo? typeInfo, HashSet<ClassInfo> includedSet)
+        {
+            if (typeInfo == null) return false;
+            if (includedSet.Contains(typeInfo)) return true;
+            if (typeInfo.GenericTypes != null && typeInfo.GenericTypes.Any(gt => includedSet.Contains(gt))) return true;
+            return false;
+        }
+
+        // メソッドが出力対象か判定（戻り値または任意の引数が includedSet に含まれるか）
+        static bool IsMethodRelevant(MethodInfo method, HashSet<ClassInfo> includedSet)
+        {
+            if (method == null) return false;
+            if (method.ReturnType != null && IsMemberRelevant(method.ReturnType, includedSet)) return true;
+            if (method.Parameters != null && method.Parameters.Any(p => IsMemberRelevant(p.TypeClass, includedSet))) return true;
+            return false;
         }
 
         public static void WriteMember(StringBuilder sb, MemberInfo member, Accessibility minAccessibility)
@@ -262,7 +307,7 @@ namespace FrostNova.MmdClassDiagramBase
             sb.Append(")");
 
             //戻り値の型
-            if (method.ReturnType != null && method.ReturnType.Name !="Void")
+            if (method.ReturnType != null && method.ReturnType.Name != "Void")
             {
                 sb.Append(" ");
                 WriteTypeName(sb, method.ReturnType);
