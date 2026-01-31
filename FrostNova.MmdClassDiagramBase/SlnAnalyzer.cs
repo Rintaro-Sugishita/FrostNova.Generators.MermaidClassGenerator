@@ -414,6 +414,9 @@ namespace FrostNova.MmdClassDiagramBase
             if (info == null) return false;
             if (info.IsIgnore) return false;
 
+            if (string.IsNullOrWhiteSpace(info.Name) && string.IsNullOrWhiteSpace(info.Namespace))
+                return false;
+            
             if (info.Namespace.StartsWith("System.")) return false;
             if (info.Namespace.StartsWith("Microsoft.")) return false;
 
