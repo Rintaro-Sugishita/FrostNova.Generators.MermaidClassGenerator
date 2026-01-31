@@ -25,6 +25,7 @@ namespace FrostNova.MmdClassDiagramBase
 
         private SymbolEqualityComparer symbolComparer = SymbolEqualityComparer.Default;
         private ClassInfoComparer classComparer = new ClassInfoComparer();
+        private readonly Dictionary<string, ClassInfo> _classMap = new Dictionary<string, ClassInfo>(StringComparer.Ordinal);
 
         public async Task<List<ClassInfo>> AnalyzeSolution(string slnPath, DiagramConfig config)
         {
@@ -59,7 +60,7 @@ namespace FrostNova.MmdClassDiagramBase
 
             var symbolComparer = SymbolEqualityComparer.Default;
             var deps = new HashSet<ClassInfo>(comparer: classComparer);
-
+            _classMap.Clear();
             //ソリューションに含まれるプロジェクト（参照は除く）
             var projects = solution.Projects;
             foreach (var project in projects)
@@ -104,12 +105,19 @@ namespace FrostNova.MmdClassDiagramBase
 
         private void AnalyzeClass(HashSet<ClassInfo> deps, INamedTypeSymbol clsSymbol, ClassDeclarationSyntax cls, SemanticModel semanticModel, Document document)
         {
-            ClassInfo classInfo = new ClassInfo(clsSymbol);
-            if (!deps.Add(classInfo))
+            var key = GetSymbolKey(clsSymbol);
+            if (!_classMap.TryGetValue(key, out var classInfo))
             {
-                //既にあるならそっちを使う
-                classInfo = deps.First(x => symbolComparer.Equals(x.Symbol, clsSymbol));
+                classInfo = new ClassInfo(clsSymbol);
+                deps.Add(classInfo);
+                _classMap[key] = classInfo;
             }
+            //ClassInfo classInfo = new ClassInfo(clsSymbol);
+            //if (!deps.Add(classInfo))
+            //{
+            //    //既にあるならそっちを使う
+            //    classInfo = deps.First(x => symbolComparer.Equals(x.Symbol, clsSymbol));
+            //}
             if (classInfo.IsFirstRead)
             {
                 //初ならクラス解析をする
@@ -338,8 +346,9 @@ namespace FrostNova.MmdClassDiagramBase
                 //view model
                 if (classInfo.VmTypeSymbol != null)
                 {
-                    var vmClass = list.FirstOrDefault(x => symbolComparer.Equals(x.Symbol, classInfo.VmTypeSymbol));
-
+                    //var vmClass = list.FirstOrDefault(x => symbolComparer.Equals(x.Symbol, classInfo.VmTypeSymbol));
+                    var vmKey = GetSymbolKey(classInfo.VmTypeSymbol);
+                    _classMap.TryGetValue(vmKey, out var vmClass);
                     isAdded.Add(AddDependency(deps, visited, classInfo, vmClass, config, DependKind.Dependency));
                 }
 
@@ -419,32 +428,58 @@ namespace FrostNova.MmdClassDiagramBase
 
         ClassInfo AddDeps(HashSet<ClassInfo> deps, ITypeSymbol symbol, ClassInfo baseClass)
         {
-            var typeSymbol = deps.FirstOrDefault(x => symbolComparer.Equals(x.Symbol, symbol));
+            var key = GetSymbolKey(symbol);
 
-            if (typeSymbol == null)
+            if (_classMap.TryGetValue(key, out var typeSymbol))
             {
-                typeSymbol = new ClassInfo(symbol);
-                deps.Add(typeSymbol);
-                //ジェネリック型を解析する
-                if (typeSymbol.Symbol is INamedTypeSymbol namedTypeSymbol && namedTypeSymbol.IsGenericType)
-                {
-                    foreach (var item in namedTypeSymbol.TypeArguments)
-                    {
-                        if (item.IsAnonymousType) continue;
-                        var res = AddDeps(deps, item, baseClass);
-                        typeSymbol.GenericTypes.Add(res);
+                return typeSymbol;
+            }
+            typeSymbol = new ClassInfo(symbol);
+            deps.Add(typeSymbol);
+            _classMap[key] = typeSymbol;
 
-                    }
-                    foreach (var item in namedTypeSymbol.TypeParameters)
-                    {
-                        typeSymbol.GenericArgumentNames.Add(item.Name);
-                    }
+            //ジェネリック型を解析する
+            if (typeSymbol.Symbol is INamedTypeSymbol namedTypeSymbol && namedTypeSymbol.IsGenericType)
+            {
+                foreach (var item in namedTypeSymbol.TypeArguments)
+                {
+                    if (item.IsAnonymousType) continue;
+                    var res = AddDeps(deps, item, baseClass);
+                    typeSymbol.GenericTypes.Add(res);
+
+                }
+                foreach (var item in namedTypeSymbol.TypeParameters)
+                {
+                    typeSymbol.GenericArgumentNames.Add(item.Name);
                 }
             }
 
             return typeSymbol;
         }
 
+        private static string GetSymbolKey(ITypeSymbol symbol)
+        {
+            if (symbol == null) return string.Empty;
+
+            // OriginalDefinition を使い、名前空間付きの完全名＋アセンブリ名でキー化
+            var named = symbol as INamedTypeSymbol;
+            string fullName;
+            try
+            {
+                fullName = symbol.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+            catch
+            {
+                fullName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+
+            var assemblyName = (symbol.ContainingAssembly?.Identity?.Name) ?? string.Empty;
+
+            // ジェネリックのアリティを加えることで差異を吸収
+            var arity = named?.Arity ?? 0;
+
+            return $"{fullName}|{assemblyName}|arity={arity}";
+        }
 
 
 
