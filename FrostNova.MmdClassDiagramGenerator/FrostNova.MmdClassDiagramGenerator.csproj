@@ -8,7 +8,7 @@
     
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>1.0.0</Version>
+    <Version>1.1.1</Version>
     <RepositoryUrl>https://github.com/Rintaro-Sugishita/FrostNova.Generators.MermaidClassGenerator</RepositoryUrl>
     <Authors>R.Sugishita</Authors>
     <ZipOutput>$(solutionDir)publish\FrostNova.Generators.MermaidClassGenerator_$(Version).zip</ZipOutput>
