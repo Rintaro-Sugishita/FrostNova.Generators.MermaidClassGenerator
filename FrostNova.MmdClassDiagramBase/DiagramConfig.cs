@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -29,6 +30,8 @@ namespace FrostNova.MmdClassDiagramGenerator
 
 
         public bool OutputNamespace { get; set; } = true;
+
+        public string[] ExcludeMemberNamespaces { get; set; } = [];
 
         [JsonConverter(typeof(AccessibilityConverter))]
         public Accessibility MethodAccessibility { get; set; } = Accessibility.Private;
@@ -127,6 +130,12 @@ namespace FrostNova.MmdClassDiagramGenerator
                 return ".png";
             }
             return ".md";
+        }
+
+        public bool ShouldExcludeMembers(string? ns)
+        {
+            if (string.IsNullOrEmpty(ns)) return false;
+            return ExcludeMemberNamespaces.Any(x => ns.StartsWith(x, StringComparison.Ordinal));
         }
     }
 }

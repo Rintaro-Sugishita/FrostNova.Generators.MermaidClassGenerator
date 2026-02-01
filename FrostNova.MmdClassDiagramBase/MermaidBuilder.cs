@@ -235,54 +235,62 @@ namespace FrostNova.MmdClassDiagramBase
             // プロジェクト跨ぎのルール：
             // - isFromSourceAssembly == true の場合（参照元アセンブリのクラス）は従来のルールでメンバー出力
             // - false（外部クラス）の場合は、参照元が実際に参照している型のみを基準にメンバーを出力する
-            if (isFromSourceAssembly)
+            bool skipMembers = config.ShouldExcludeMembers(classInfo.Namespace) && !isRootOrVm;
+            if (!skipMembers)
             {
-                foreach (var field in classInfo.Properties)
+                if (isFromSourceAssembly)
                 {
-                    if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                    foreach (var field in classInfo.Properties)
                     {
-                        WriteMember(sb, field, config.PropertyAccessibility);
+                        if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                        {
+                            WriteMember(sb, field, config.PropertyAccessibility);
+                        }
+                    }
+                    foreach (var field in classInfo.Fields)
+                    {
+                        if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                        {
+                            WriteMember(sb, field, config.FieldAccessibility);
+                        }
+                    }
+                    foreach (var method in classInfo.Methods)
+                    {
+                        if (isRootOrVm || IsMethodRelevant(method, includedSet))
+                        {
+                            WriteMethod(sb, method, config.MethodAccessibility);
+                        }
                     }
                 }
-                foreach (var field in classInfo.Fields)
+                else
                 {
-                    if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                    // 外部クラス: referencedTypeFullNames を基準に絞る
+                    foreach (var field in classInfo.Properties)
                     {
-                        WriteMember(sb, field, config.FieldAccessibility);
+                        if (isRootOrVm || IsTypeReferencedBySources(field.TypeInfo, referencedTypeFullNames))
+                        {
+                            WriteMember(sb, field, config.PropertyAccessibility);
+                        }
                     }
-                }
-                foreach (var method in classInfo.Methods)
-                {
-                    if (isRootOrVm || IsMethodRelevant(method, includedSet))
+                    foreach (var field in classInfo.Fields)
                     {
-                        WriteMethod(sb, method, config.MethodAccessibility);
+                        if (isRootOrVm || IsTypeReferencedBySources(field.TypeInfo, referencedTypeFullNames))
+                        {
+                            WriteMember(sb, field, config.FieldAccessibility);
+                        }
+                    }
+                    foreach (var method in classInfo.Methods)
+                    {
+                        if (isRootOrVm || IsMethodReferencedBySources(method, referencedTypeFullNames))
+                        {
+                            WriteMethod(sb, method, config.MethodAccessibility);
+                        }
                     }
                 }
             }
             else
             {
-                // 外部クラス: referencedTypeFullNames を基準に絞る
-                foreach (var field in classInfo.Properties)
-                {
-                    if (isRootOrVm || IsTypeReferencedBySources(field.TypeInfo, referencedTypeFullNames))
-                    {
-                        WriteMember(sb, field, config.PropertyAccessibility);
-                    }
-                }
-                foreach (var field in classInfo.Fields)
-                {
-                    if (isRootOrVm || IsTypeReferencedBySources(field.TypeInfo, referencedTypeFullNames))
-                    {
-                        WriteMember(sb, field, config.FieldAccessibility);
-                    }
-                }
-                foreach (var method in classInfo.Methods)
-                {
-                    if (isRootOrVm || IsMethodReferencedBySources(method, referencedTypeFullNames))
-                    {
-                        WriteMethod(sb, method, config.MethodAccessibility);
-                    }
-                }
+                sb.AppendLine("        %% Members hidden by config");
             }
 
             sb.AppendLine("    }");
