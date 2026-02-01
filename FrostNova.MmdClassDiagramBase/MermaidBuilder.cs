@@ -107,6 +107,9 @@ namespace FrostNova.MmdClassDiagramBase
             classList.AddRange(list.Where(x => x.Dest != null).Select(x => x.Dest!));
             classList = classList.Distinct().ToList();
 
+            // ここで DbSet 自体を除外（ノードも関係も出したくない場合）
+            classList = classList.Where(c => !IsEfCoreDbSet(c)).ToList();
+
             // 出力対象クラス集合（そのファイルに関連するクラス）
             var includedSet = new HashSet<ClassInfo>(classList);
 
@@ -122,7 +125,7 @@ namespace FrostNova.MmdClassDiagramBase
                 var vmClass = classList.FirstOrDefault(c => c.Symbol != null && symbolComparer.Equals(c.Symbol, root.VmTypeSymbol));
                 if (vmClass != null) vmInOutput.Add(vmClass);
             }
-            
+
             // この出力における「参照元アセンブリ」を収集（DependInfo の Source が属するアセンブリ）
             var sourceAssemblyNames = list
                 .Where(d => d.Source?.Symbol?.ContainingAssembly != null)
@@ -131,19 +134,16 @@ namespace FrostNova.MmdClassDiagramBase
                 .Distinct()
                 .ToHashSet(StringComparer.Ordinal);
 
-            // 参照元が参照している型（Dest）のフルネーム集合
-            var referencedTypeFullNames = list
-                .Where(d =>
-                {
-                    // Source の属するアセンブリが参照元アセンブリに含まれるものだけを対象とする
-                    var asm = d.Source?.Symbol?.ContainingAssembly?.Identity?.Name;
-                    return asm != null && sourceAssemblyNames.Contains(asm);
-                })
-                .Where(d => d.Dest != null)
-                .Select(d => d.Dest!.FullName)
-                .Where(fn => !string.IsNullOrEmpty(fn))
-                .Distinct()
-                .ToHashSet(StringComparer.Ordinal);
+            // 参照元が参照している型（Dest）のフルネーム集合（Dest とそのジェネリック引数を再帰的に含める）
+            var referencedTypeFullNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var d in list)
+            {
+                var asm = d.Source?.Symbol?.ContainingAssembly?.Identity?.Name;
+                if (asm == null || !sourceAssemblyNames.Contains(asm)) continue;
+                if (d.Dest == null) continue;
+
+                AddTypeAndGenericFullNames(d.Dest, referencedTypeFullNames);
+            }
 
             var namespaceGrouped = classList.GroupBy(x => x.Namespace);
 
@@ -169,7 +169,7 @@ namespace FrostNova.MmdClassDiagramBase
                     sb.AppendLine();
                     // ルートまたはその ViewModel の場合は全メンバー出力、それ以外は includedSet に関係するメンバーのみ出力
                     var isRootOrVm = classInfo.IsRoot || vmInOutput.Contains(classInfo);
-                    
+
                     var asmName = classInfo.Symbol?.ContainingAssembly?.Identity?.Name;
                     var isFromSourceAssembly = asmName != null && sourceAssemblyNames.Contains(asmName);
 
@@ -186,6 +186,10 @@ namespace FrostNova.MmdClassDiagramBase
             //依存関係の出力
             foreach (var dependInfo in list)
             {
+                // DbSet を含む依存は出力しない（DbSet自体はノードも関係も出したくないため）
+                if (dependInfo.Source != null && IsEfCoreDbSet(dependInfo.Source)) continue;
+                if (dependInfo.Dest != null && IsEfCoreDbSet(dependInfo.Dest)) continue;
+
                 WriteDependency(sb, dependInfo, excludeNamespace);
             }
 
@@ -286,6 +290,20 @@ namespace FrostNova.MmdClassDiagramBase
             }
 
             sb.AppendLine("    }");
+        }
+
+        // 補助: Dest とそのジェネリック引数を再帰的に fullName 集合へ追加
+        static void AddTypeAndGenericFullNames(ClassInfo? type, HashSet<string> set)
+        {
+            if (type == null) return;
+            if (!string.IsNullOrEmpty(type.FullName)) set.Add(type.FullName);
+            if (type.GenericTypes != null)
+            {
+                foreach (var gt in type.GenericTypes)
+                {
+                    AddTypeAndGenericFullNames(gt, set);
+                }
+            }
         }
 
         // 補助: referencedTypeFullNames に含まれる型か（ジェネリック引数も確認）
@@ -486,6 +504,26 @@ namespace FrostNova.MmdClassDiagramBase
                 _ => null
             };
             return a;
+        }
+
+        // EF Core 判定ヘルパー: DbSet 判定
+        static bool IsEfCoreDbSet(ClassInfo? c)
+        {
+            if (c == null || c.Symbol == null) return false;
+            if (c.Symbol is INamedTypeSymbol named)
+            {
+                try
+                {
+                    var orig = named.OriginalDefinition;
+                    var s = orig.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    if (s.Contains("Microsoft.EntityFrameworkCore.DbSet")) return true;
+                }
+                catch { }
+                if (string.Equals(c.Name, "DbSet", StringComparison.Ordinal) &&
+                    (c.Namespace?.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal) ?? false))
+                    return true;
+            }
+            return false;
         }
 
     }
