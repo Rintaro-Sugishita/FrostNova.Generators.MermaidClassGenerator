@@ -63,8 +63,7 @@ namespace FrostNova.MmdClassDiagramGenerator
         }
 
         public string[] RootAttributes { get; set; } = new[] { "FrostNova.MmdClassDiagramGenerator.Attributes.MmdDiagramRootAttribute" };
-
-
+        public string[] ReachabilityCheckNamespaces { get; set; } = [];
         public static DiagramConfig LoadConfig(string configPath)
         {
             if (!File.Exists(configPath))
@@ -136,6 +135,11 @@ namespace FrostNova.MmdClassDiagramGenerator
         {
             if (string.IsNullOrEmpty(ns)) return false;
             return ExcludeMemberNamespaces.Any(x => ns.StartsWith(x, StringComparison.Ordinal));
+        }
+        public bool IsReachabilityCheckTarget(string? ns)
+        {
+            if (string.IsNullOrEmpty(ns)) return false;
+            return ReachabilityCheckNamespaces.Any(x => ns.StartsWith(x, StringComparison.Ordinal));
         }
     }
 }

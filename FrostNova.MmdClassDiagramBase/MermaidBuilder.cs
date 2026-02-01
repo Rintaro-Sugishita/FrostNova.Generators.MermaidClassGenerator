@@ -93,6 +93,39 @@ namespace FrostNova.MmdClassDiagramBase
 
         public void Output(StringBuilder sb, List<DependInfo> list, DiagramConfig config, MermaidOutputType type, bool isOutputNamespace, string[] excludeNamespace)
         {
+            var allPotentialClasses = list.Select(x => x.Source)
+        .Concat(list.Where(x => x.Dest != null).Select(x => x.Dest!))
+        .Distinct()
+        .ToList();
+
+            // 2. Rootから到達可能な全クラスを事前に計算しておく
+            var entryPoints = allPotentialClasses.Where(x => x.IsRoot).ToList();
+            var reachableSet = TraceReachableClasses(entryPoints, list);
+            AddViewModelsToSet(reachableSet, allPotentialClasses); // 前回の返答のメソッドを利用
+
+            // 3. 出力対象のフィルタリング
+            var includedSet = new HashSet<ClassInfo>();
+
+            foreach (var c in allPotentialClasses)
+            {
+                // 判定ロジック:
+                // A. チェック対象の名前空間ではないクラス → 無条件で残す
+                // B. チェック対象の名前空間だが、Rootから到達可能 → 残す
+                // C. チェック対象の名前空間で、かつ到達不能 → 除外！
+
+                bool isTargetNamespace = config.IsReachabilityCheckTarget(c.Namespace);
+                bool isReachable = reachableSet.Contains(c);
+
+                if (!isTargetNamespace || isReachable)
+                {
+                    includedSet.Add(c);
+                }
+            }
+
+            // あとはこの includedSet を使って描画
+            var classList = includedSet.ToList();
+
+
             if (type.HasFlag(MermaidOutputType.Markdown))
             {
                 sb.AppendLine("```mermaid");
@@ -100,44 +133,44 @@ namespace FrostNova.MmdClassDiagramBase
 
             sb.AppendLine("classDiagram");
 
-            // 1. 真のルート要素（configや呼び出し元でRootフラグが立っているもの）を特定
-            var entryPoints = list
-                .Where(x => x.Source.IsRoot)
-                .Select(x => x.Source)
-                .Distinct()
-                .ToList();
+            //// 1. 真のルート要素（configや呼び出し元でRootフラグが立っているもの）を特定
+            //var entryPoints = list
+            //    .Where(x => x.Source.IsRoot)
+            //    .Select(x => x.Source)
+            //    .Distinct()
+            //    .ToList();
 
-            // 2. ルートから到達可能なクラスのみを抽出する (再帰的探索)
-            var reachableClasses = new HashSet<ClassInfo>();
-            var stack = new Stack<ClassInfo>(entryPoints);
+            //// 2. ルートから到達可能なクラスのみを抽出する (再帰的探索)
+            //var reachableClasses = new HashSet<ClassInfo>();
+            //var stack = new Stack<ClassInfo>(entryPoints);
 
-            while (stack.Count > 0)
-            {
-                var current = stack.Pop();
-                if (reachableClasses.Contains(current)) continue;
+            //while (stack.Count > 0)
+            //{
+            //    var current = stack.Pop();
+            //    if (reachableClasses.Contains(current)) continue;
 
-                // DbSet自体は含めない
-                if (IsEfCoreDbSet(current)) continue;
+            //    // DbSet自体は含めない
+            //    if (IsEfCoreDbSet(current)) continue;
 
-                reachableClasses.Add(current);
+            //    reachableClasses.Add(current);
 
-                // 現在のクラスから出ている依存先をスタックに積む
-                var dependencies = list
-                    .Where(d => d.Source == current && d.Dest != null)
-                    .Select(d => d.Dest!);
+            //    // 現在のクラスから出ている依存先をスタックに積む
+            //    var dependencies = list
+            //        .Where(d => d.Source == current && d.Dest != null)
+            //        .Select(d => d.Dest!);
 
-                foreach (var dest in dependencies)
-                {
-                    if (!reachableClasses.Contains(dest))
-                    {
-                        stack.Push(dest);
-                    }
-                }
-            }
+            //    foreach (var dest in dependencies)
+            //    {
+            //        if (!reachableClasses.Contains(dest))
+            //        {
+            //            stack.Push(dest);
+            //        }
+            //    }
+            //}
 
-            // 3. 出力対象を「到達可能なクラス」に限定
-            var classList = reachableClasses.ToList();
-            var includedSet = reachableClasses;
+            //// 3. 出力対象を「到達可能なクラス」に限定
+            //var classList = reachableClasses.ToList();
+            //var includedSet = reachableClasses;
 
             // --- 以下、既存の ViewModel 判定や Assembly 判定 ---
             var rootsInOutput = classList.Where(c => c.IsRoot).ToList();
@@ -296,6 +329,71 @@ namespace FrostNova.MmdClassDiagramBase
             sb.AppendLine("    }");
         }
 
+        /// <summary>
+        /// Root要素から依存関係を再帰的に辿り、到達可能なクラスの集合を返します。
+        /// </summary>
+        private HashSet<ClassInfo> TraceReachableClasses(List<ClassInfo> entries, List<DependInfo> allDepends)
+        {
+            var reachable = new HashSet<ClassInfo>();
+            var stack = new Stack<ClassInfo>(entries);
+
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+
+                // 既に探索済み、あるいはnullの場合はスキップ
+                if (current == null || reachable.Contains(current)) continue;
+
+                // DbSet自体はノードとして出したくない場合が多いのでここで弾く
+                if (IsEfCoreDbSet(current)) continue;
+
+                // 到達可能リストに追加
+                reachable.Add(current);
+
+                // 現在のクラス (Source) から出ている依存先 (Dest) を抽出
+                // 矢印の向きに従って辿る
+                var dependencies = allDepends
+                    .Where(d => d.Source != null && d.Source.Equals(current) && d.Dest != null)
+                    .Select(d => d.Dest!)
+                    .ToList();
+
+                foreach (var dest in dependencies)
+                {
+                    if (!reachable.Contains(dest))
+                    {
+                        stack.Push(dest);
+                    }
+                }
+            }
+            return reachable;
+        }
+
+        /// <summary>
+        /// Rootに対応するViewModelが存在する場合、それらも「到達可能」としてセットに加えます。
+        /// </summary>
+        private void AddViewModelsToSet(HashSet<ClassInfo> set, List<ClassInfo> allPotentialClasses)
+        {
+            var symbolComparer = SymbolEqualityComparer.Default;
+
+            // 現在のセットに含まれるRoot要素の中で、ViewModelのSymbolを持っているものを抽出
+            var rootHasVm = set.Where(c => c.IsRoot && c.VmTypeSymbol != null).ToList();
+
+            foreach (var root in rootHasVm)
+            {
+                // 全クラスの中から、Symbolが一致するViewModelクラスを探す
+                var vmClass = allPotentialClasses.FirstOrDefault(c =>
+                    c.Symbol != null && symbolComparer.Equals(c.Symbol, root.VmTypeSymbol));
+
+                if (vmClass != null && !set.Contains(vmClass))
+                {
+                    // ViewModel自体をセットに追加
+                    set.Add(vmClass);
+
+                    // 注意: ViewModelからさらに先に伸びる依存関係も辿る必要がある場合は、
+                    // TraceReachableClasses を再度呼ぶか、Trace側で最初からVMもEntryに入れる必要があります。
+                }
+            }
+        }
         // 補助: Dest とそのジェネリック引数を再帰的に fullName 集合へ追加
         static void AddTypeAndGenericFullNames(ClassInfo? type, HashSet<string> set)
         {
