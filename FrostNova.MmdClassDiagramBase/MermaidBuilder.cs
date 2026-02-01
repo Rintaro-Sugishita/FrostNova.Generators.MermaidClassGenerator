@@ -122,6 +122,28 @@ namespace FrostNova.MmdClassDiagramBase
                 var vmClass = classList.FirstOrDefault(c => c.Symbol != null && symbolComparer.Equals(c.Symbol, root.VmTypeSymbol));
                 if (vmClass != null) vmInOutput.Add(vmClass);
             }
+            
+            // この出力における「参照元アセンブリ」を収集（DependInfo の Source が属するアセンブリ）
+            var sourceAssemblyNames = list
+                .Where(d => d.Source?.Symbol?.ContainingAssembly != null)
+                .Select(d => d.Source.Symbol.ContainingAssembly.Identity.Name)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Distinct()
+                .ToHashSet(StringComparer.Ordinal);
+
+            // 参照元が参照している型（Dest）のフルネーム集合
+            var referencedTypeFullNames = list
+                .Where(d =>
+                {
+                    // Source の属するアセンブリが参照元アセンブリに含まれるものだけを対象とする
+                    var asm = d.Source?.Symbol?.ContainingAssembly?.Identity?.Name;
+                    return asm != null && sourceAssemblyNames.Contains(asm);
+                })
+                .Where(d => d.Dest != null)
+                .Select(d => d.Dest!.FullName)
+                .Where(fn => !string.IsNullOrEmpty(fn))
+                .Distinct()
+                .ToHashSet(StringComparer.Ordinal);
 
             var namespaceGrouped = classList.GroupBy(x => x.Namespace);
 
@@ -147,7 +169,11 @@ namespace FrostNova.MmdClassDiagramBase
                     sb.AppendLine();
                     // ルートまたはその ViewModel の場合は全メンバー出力、それ以外は includedSet に関係するメンバーのみ出力
                     var isRootOrVm = classInfo.IsRoot || vmInOutput.Contains(classInfo);
-                    WriteClass(sb, classInfo, config, includedSet, isRootOrVm);
+                    
+                    var asmName = classInfo.Symbol?.ContainingAssembly?.Identity?.Name;
+                    var isFromSourceAssembly = asmName != null && sourceAssemblyNames.Contains(asmName);
+
+                    WriteClass(sb, classInfo, config, includedSet, isRootOrVm, isFromSourceAssembly, referencedTypeFullNames);
                 }
 
                 if (isOutputNamespace)
@@ -172,7 +198,7 @@ namespace FrostNova.MmdClassDiagramBase
 
 
 
-        void WriteClass(StringBuilder sb, ClassInfo classInfo, DiagramConfig config, HashSet<ClassInfo> includedSet, bool isRootOrVm)
+        void WriteClass(StringBuilder sb, ClassInfo classInfo, DiagramConfig config, HashSet<ClassInfo> includedSet, bool isRootOrVm, bool isFromSourceAssembly, HashSet<string> referencedTypeFullNames)
         {
             sb.Append("    class ");
             sb.Append(classInfo.Name);
@@ -206,47 +232,79 @@ namespace FrostNova.MmdClassDiagramBase
             {
                 sb.AppendLine("        <<Enumeration>>");
             }
-
-
-            //プロパティの出力
-            foreach (var field in classInfo.Properties)
+            // プロジェクト跨ぎのルール：
+            // - isFromSourceAssembly == true の場合（参照元アセンブリのクラス）は従来のルールでメンバー出力
+            // - false（外部クラス）の場合は、参照元が実際に参照している型のみを基準にメンバーを出力する
+            if (isFromSourceAssembly)
             {
-                if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                foreach (var field in classInfo.Properties)
                 {
-                    WriteMember(sb, field, config.PropertyAccessibility);
+                    if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                    {
+                        WriteMember(sb, field, config.PropertyAccessibility);
+                    }
+                }
+                foreach (var field in classInfo.Fields)
+                {
+                    if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                    {
+                        WriteMember(sb, field, config.FieldAccessibility);
+                    }
+                }
+                foreach (var method in classInfo.Methods)
+                {
+                    if (isRootOrVm || IsMethodRelevant(method, includedSet))
+                    {
+                        WriteMethod(sb, method, config.MethodAccessibility);
+                    }
                 }
             }
-            //フィールドの出力
-            foreach (var field in classInfo.Fields)
+            else
             {
-                if (isRootOrVm || IsMemberRelevant(field.TypeInfo, includedSet))
+                // 外部クラス: referencedTypeFullNames を基準に絞る
+                foreach (var field in classInfo.Properties)
                 {
-                    WriteMember(sb, field, config.FieldAccessibility);
+                    if (isRootOrVm || IsTypeReferencedBySources(field.TypeInfo, referencedTypeFullNames))
+                    {
+                        WriteMember(sb, field, config.PropertyAccessibility);
+                    }
                 }
-            }
-
-            //関数の出力
-            foreach (var method in classInfo.Methods)
-            {
-                if (isRootOrVm || IsMethodRelevant(method, includedSet))
+                foreach (var field in classInfo.Fields)
                 {
-                    WriteMethod(sb, method, config.MethodAccessibility);
+                    if (isRootOrVm || IsTypeReferencedBySources(field.TypeInfo, referencedTypeFullNames))
+                    {
+                        WriteMember(sb, field, config.FieldAccessibility);
+                    }
+                }
+                foreach (var method in classInfo.Methods)
+                {
+                    if (isRootOrVm || IsMethodReferencedBySources(method, referencedTypeFullNames))
+                    {
+                        WriteMethod(sb, method, config.MethodAccessibility);
+                    }
                 }
             }
 
             sb.AppendLine("    }");
-
-            ////インターフェース
-            //foreach (var item in classInfo.ImplementedInterfaces)
-            //{
-            //    sb.Append("<<");
-            //    sb.Append(item.Name);
-            //    sb.Append(">> ");
-            //    sb.AppendLine(classInfo.Name);
-            //}
-
         }
 
+        // 補助: referencedTypeFullNames に含まれる型か（ジェネリック引数も確認）
+        static bool IsTypeReferencedBySources(ClassInfo? typeInfo, HashSet<string> referencedTypeFullNames)
+        {
+            if (typeInfo == null) return false;
+            if (!string.IsNullOrEmpty(typeInfo.FullName) && referencedTypeFullNames.Contains(typeInfo.FullName)) return true;
+            if (typeInfo.GenericTypes != null && typeInfo.GenericTypes.Any(gt => !string.IsNullOrEmpty(gt.FullName) && referencedTypeFullNames.Contains(gt.FullName))) return true;
+            return false;
+        }
+
+        // 補助: メソッドが参照元から参照されているか判定（戻り値または引数の型が referencedTypeFullNames に含まれるか）
+        static bool IsMethodReferencedBySources(MethodInfo method, HashSet<string> referencedTypeFullNames)
+        {
+            if (method == null) return false;
+            if (method.ReturnType != null && IsTypeReferencedBySources(method.ReturnType, referencedTypeFullNames)) return true;
+            if (method.Parameters != null && method.Parameters.Any(p => IsTypeReferencedBySources(p.TypeClass, referencedTypeFullNames))) return true;
+            return false;
+        }
         // 指定クラス集合に含まれる型か（ジェネリック引数も確認）
         static bool IsMemberRelevant(ClassInfo? typeInfo, HashSet<ClassInfo> includedSet)
         {
