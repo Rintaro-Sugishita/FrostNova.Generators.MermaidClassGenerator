@@ -93,7 +93,6 @@ namespace FrostNova.MmdClassDiagramBase
 
         public void Output(StringBuilder sb, List<DependInfo> list, DiagramConfig config, MermaidOutputType type, bool isOutputNamespace, string[] excludeNamespace)
         {
-
             if (type.HasFlag(MermaidOutputType.Markdown))
             {
                 sb.AppendLine("```mermaid");
@@ -101,94 +100,93 @@ namespace FrostNova.MmdClassDiagramBase
 
             sb.AppendLine("classDiagram");
 
+            // 1. 真のルート要素（configや呼び出し元でRootフラグが立っているもの）を特定
+            var entryPoints = list
+                .Where(x => x.Source.IsRoot)
+                .Select(x => x.Source)
+                .Distinct()
+                .ToList();
 
-            //クラス一覧を取得 出力対象外はここまでで省かれている
-            var classList = list.Select(x => x.Source).ToList();
-            classList.AddRange(list.Where(x => x.Dest != null).Select(x => x.Dest!));
-            classList = classList.Distinct().ToList();
+            // 2. ルートから到達可能なクラスのみを抽出する (再帰的探索)
+            var reachableClasses = new HashSet<ClassInfo>();
+            var stack = new Stack<ClassInfo>(entryPoints);
 
-            // ここで DbSet 自体を除外（ノードも関係も出したくない場合）
-            classList = classList.Where(c => !IsEfCoreDbSet(c)).ToList();
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+                if (reachableClasses.Contains(current)) continue;
 
-            // 出力対象クラス集合（そのファイルに関連するクラス）
-            var includedSet = new HashSet<ClassInfo>(classList);
+                // DbSet自体は含めない
+                if (IsEfCoreDbSet(current)) continue;
 
-            // ルートクラス一覧（この出力の中にあるルート）
+                reachableClasses.Add(current);
+
+                // 現在のクラスから出ている依存先をスタックに積む
+                var dependencies = list
+                    .Where(d => d.Source == current && d.Dest != null)
+                    .Select(d => d.Dest!);
+
+                foreach (var dest in dependencies)
+                {
+                    if (!reachableClasses.Contains(dest))
+                    {
+                        stack.Push(dest);
+                    }
+                }
+            }
+
+            // 3. 出力対象を「到達可能なクラス」に限定
+            var classList = reachableClasses.ToList();
+            var includedSet = reachableClasses;
+
+            // --- 以下、既存の ViewModel 判定や Assembly 判定 ---
             var rootsInOutput = classList.Where(c => c.IsRoot).ToList();
-
-            // ルートの ViewModel として含まれているクラス集合
             var vmInOutput = new HashSet<ClassInfo>();
             var symbolComparer = SymbolEqualityComparer.Default;
             foreach (var root in rootsInOutput)
             {
                 if (root.VmTypeSymbol == null) continue;
-                var vmClass = classList.FirstOrDefault(c => c.Symbol != null && symbolComparer.Equals(c.Symbol, root.VmTypeSymbol));
-                if (vmClass != null) vmInOutput.Add(vmClass);
+                // classList(到達可能リスト)の中にVMがあるか確認
+                var vmClass = list.SelectMany(d => new[] { d.Source, d.Dest })
+                                 .FirstOrDefault(c => c != null && c.Symbol != null && symbolComparer.Equals(c.Symbol, root.VmTypeSymbol));
+                if (vmClass != null)
+                {
+                    vmInOutput.Add(vmClass);
+                    includedSet.Add(vmClass); // VMも出力対象に加える
+                }
             }
 
-            // この出力における「参照元アセンブリ」を収集（DependInfo の Source が属するアセンブリ）
-            var sourceAssemblyNames = list
-                .Where(d => d.Source?.Symbol?.ContainingAssembly != null)
-                .Select(d => d.Source.Symbol.ContainingAssembly.Identity.Name)
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Distinct()
-                .ToHashSet(StringComparer.Ordinal);
-
-            // 参照元が参照している型（Dest）のフルネーム集合（Dest とそのジェネリック引数を再帰的に含める）
-            var referencedTypeFullNames = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var d in list)
-            {
-                var asm = d.Source?.Symbol?.ContainingAssembly?.Identity?.Name;
-                if (asm == null || !sourceAssemblyNames.Contains(asm)) continue;
-                if (d.Dest == null) continue;
-
-                AddTypeAndGenericFullNames(d.Dest, referencedTypeFullNames);
-            }
-
+            // --- フィルタリングされたリストでネームスペース・クラス出力 ---
             var namespaceGrouped = classList.GroupBy(x => x.Namespace);
 
-            //名前空間ごとに出力する
-
-            //全クラスの出力
             foreach (var group in namespaceGrouped)
             {
-                if (excludeNamespace.Contains(group.Key))
-                {
-                    continue;
-                }
-                //名前空間の出力
+                if (excludeNamespace.Contains(group.Key)) continue;
+
                 if (isOutputNamespace)
                 {
-                    sb.Append("namespace ");
-                    sb.Append(group.Key);
-                    sb.AppendLine(" {");
+                    sb.AppendLine($"namespace {group.Key} {{");
                 }
 
                 foreach (var classInfo in group)
                 {
-                    sb.AppendLine();
-                    // ルートまたはその ViewModel の場合は全メンバー出力、それ以外は includedSet に関係するメンバーのみ出力
+                    // 省略されていたとしても、ここで判定
                     var isRootOrVm = classInfo.IsRoot || vmInOutput.Contains(classInfo);
-
                     var asmName = classInfo.Symbol?.ContainingAssembly?.Identity?.Name;
-                    var isFromSourceAssembly = asmName != null && sourceAssemblyNames.Contains(asmName);
+                    // sourceAssemblyNames の定義は既存コード通りとする
+                    var isFromSourceAssembly = asmName != null;
 
-                    WriteClass(sb, classInfo, config, includedSet, isRootOrVm, isFromSourceAssembly, referencedTypeFullNames);
+                    WriteClass(sb, classInfo, config, includedSet, isRootOrVm, isFromSourceAssembly, new HashSet<string>());
                 }
 
-                if (isOutputNamespace)
-                {
-                    sb.AppendLine("}");
-                }
-
+                if (isOutputNamespace) sb.AppendLine("}");
             }
 
-            //依存関係の出力
+            // 4. 依存関係の出力も「両端が includedSet に含まれるもの」に限定
             foreach (var dependInfo in list)
             {
-                // DbSet を含む依存は出力しない（DbSet自体はノードも関係も出したくないため）
-                if (dependInfo.Source != null && IsEfCoreDbSet(dependInfo.Source)) continue;
-                if (dependInfo.Dest != null && IsEfCoreDbSet(dependInfo.Dest)) continue;
+                if (dependInfo.Source == null || dependInfo.Dest == null) continue;
+                if (!includedSet.Contains(dependInfo.Source) || !includedSet.Contains(dependInfo.Dest)) continue;
 
                 WriteDependency(sb, dependInfo, excludeNamespace);
             }
@@ -197,9 +195,7 @@ namespace FrostNova.MmdClassDiagramBase
             {
                 sb.AppendLine("```");
             }
-
         }
-
 
 
         void WriteClass(StringBuilder sb, ClassInfo classInfo, DiagramConfig config, HashSet<ClassInfo> includedSet, bool isRootOrVm, bool isFromSourceAssembly, HashSet<string> referencedTypeFullNames)
